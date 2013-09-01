@@ -177,8 +177,17 @@ cmd = \
 
 def update_ip():
 	global ip
-	ip = (ip[0]+delta[0], ip[1]+delta[1])
-
+	x,y = ip[0]+delta[0], ip[1]+delta[1]
+	if x<0:
+		x = len(cells[0])-1
+	else:
+		x %= len(cells[0])
+	if y<0:
+		y = len(cells)-1
+	elif y>0:
+		y %= len(cells)
+	ip = (x,y)
+	
 def prog():
 	while True:
 		x = ip[0]
