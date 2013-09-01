@@ -151,7 +151,7 @@ cmd = \
 	'$':stk_pop,
 	'"':strmode,
 	'#':bridge,
-	'@':end,
+	'@':end
 }
 
 # --------- program flow -- #
@@ -165,19 +165,19 @@ def prog():
 		x = ip[0]
 		y = ip[1]
 		symbol = cells[y][x]
-		if symbol == '"':
+		if symbol == ord('"'):
 			strmode()
 		elif string_mode:
 			try:
-				push(ord(symbol))
+				push(symbol)
 			except TypeError: # non ascii char
 				push(0)
-		elif symbol in cmd:
-			cmd[symbol]()
-		elif symbol == ' ':
+		elif symbol in [ord(x) for x in cmd.keys()]:
+			cmd[chr(symbol)]()
+		elif symbol == ord(' '):
 			pass
-		elif symbol in '0123456789':
-			push(int(symbol))
+		elif symbol in [ord(x) for x in '0123456789']:
+			push(int(chr(symbol)))
 		else:
 			print('Syntax error:', ip)
 			end()
@@ -201,11 +201,11 @@ def format_cells():
 	m = max(map(len, cells))
 	for row in cells:
 		while len(row) < m:
-			row.append(' ')
+			row.append(ord(' '))
 
 def main():
 	global cells
-	cells = [list(x.rstrip('\n')) for x in sys.stdin.readlines()]
+	cells = [list(map(ord, x.rstrip('\n'))) for x in sys.stdin.readlines()]
 	sys.stdin = open('/dev/tty')
 	format_cells()
 	prog()
