@@ -120,6 +120,23 @@ def strmode():
 def bridge():
 	update_ip()
 
+def code_get():
+	y = pop()
+	x = pop()
+	try:
+		push(cells[y][x])
+	except IndexError:
+		push(0)
+
+def code_put():
+	y = pop()
+	x = pop()
+	v = pop()
+	try:
+		cells[y][x] = v
+	except IndexError:
+		pass
+
 def end():
 	sys.exit()
 
@@ -151,6 +168,8 @@ cmd = \
 	'$':stk_pop,
 	'"':strmode,
 	'#':bridge,
+	'g':code_get,
+	'p':code_put,
 	'@':end
 }
 
