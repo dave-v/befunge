@@ -2,6 +2,7 @@ from __future__ import print_function
 import sys, random
 
 cells = [] #  program cells
+dim = (0,0) # dimensions of the program
 delta = (1,0) # current direction
 ip = (0,0) # current position of IP
 stack = [] # program stack
@@ -129,13 +130,18 @@ def code_get():
 		push(0)
 
 def code_put():
+	global dim
 	y = pop()
 	x = pop()
 	v = pop()
 	try:
 		cells[y][x] = v
 	except IndexError:
-		pass
+		if x<0 or y<0:
+			return
+		dim = (max(dim[0], x+1), max(dim[1], y+1))
+		reformat_cells()
+		cells[y][x] = v
 
 def end():
 	sys.exit()
@@ -224,18 +230,26 @@ def pop():
 
 # ----------------- init -- #
 
-def format_cells():
-	global cells
-	m = max(map(len, cells))
+def reformat_cells():
+	global cells, dim
+	while len(cells) < dim[1]:
+		cells.append([])
 	for row in cells:
-		while len(row) < m:
+		while len(row) < dim[0]:
 			row.append(ord(' '))
 
+def print_cells():
+	c = [list(map(chr, x)) for x in cells]
+	for row in c:
+		print(row)
+
 def main():
-	global cells
+	global cells, dim
 	cells = [list(map(ord, x.rstrip('\n'))) for x in sys.stdin.readlines()]
 	sys.stdin = open('/dev/tty')
-	format_cells()
+	m = max(map(len, cells))
+	dim = (m, len(cells))
+	reformat_cells()
 	prog()
 
 if __name__ == '__main__':
