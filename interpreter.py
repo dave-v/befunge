@@ -47,6 +47,7 @@ def in_int():
 			push(int(input.readline().strip()))
 	except ValueError: # couldn't parse
 		push(0) # maybe end?
+	check_input()
 
 def in_char():
 	try:
@@ -58,6 +59,7 @@ def in_char():
 		else:
 			i = input.read(1)
 	except EOFError:
+		print('EOF')
 		push(-1)
 	if len(i)>0:
 		try:
@@ -66,6 +68,7 @@ def in_char():
 			push(0)
 	else:
 		push(-1)
+	check_input()
 
 def op_add():
 	push(pop() + pop())
@@ -243,6 +246,15 @@ def pop():
 		return 0
 
 # ----------------- init -- #
+
+def check_input():
+	global input
+	if input == None:
+		return
+	if input.read(1) == '':
+		input = None # start reading from stdin now
+	else:
+		input.seek(-1, 1) # return pointer to correct byte
 
 def reformat_cells():
 	global cells, dim
