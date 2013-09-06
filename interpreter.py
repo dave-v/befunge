@@ -1,5 +1,5 @@
 from __future__ import print_function
-import sys, random
+import sys, random, argparse
 
 cells = [] #  program cells
 dim = (0,0) # dimensions of the program
@@ -7,6 +7,7 @@ delta = (1,0) # current direction
 ip = (0,0) # current position of IP
 stack = [] # program stack
 string_mode = False # string mode (on or off)
+input = None # input for & and ~ if file supplied
 
 # -------- cmd functions -- #
 
@@ -40,19 +41,31 @@ def out_char():
 
 def in_int():
 	try:
-		push(int(raw_input('int: ')))
+		if input==None:
+			push(int(raw_input('int: ')))
+		else:
+			push(int(input.readline().strip()))
 	except ValueError: # couldn't parse
 		push(0) # maybe end?
 
 def in_char():
-	input = raw_input('char: ')
-	if len(input)>0:
+	try:
+		i = ''
+		if input==None:
+			i = raw_input('char: ')
+			if len(i) == 0:
+				i = '\n'
+		else:
+			i = input.read(1)
+	except EOFError:
+		push(-1)
+	if len(i)>0:
 		try:
-			push(ord(input[0]))
+			push(ord(i[0]))
 		except TypeError: # non ascii char
 			push(0)
 	else:
-		stack.append(0)
+		push(-1)
 
 def op_add():
 	push(pop() + pop())
@@ -142,6 +155,7 @@ def code_put():
 		dim = (max(dim[0], x+1), max(dim[1], y+1))
 		reformat_cells()
 		cells[y][x] = v
+	#print_cells()
 
 def end():
 	sys.exit()
@@ -243,10 +257,22 @@ def print_cells():
 	for row in c:
 		print(row)
 
+def parse_args():
+	global cells, input
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-i', '--input', required=False)
+	parser.add_argument('befunge')
+	args = parser.parse_args()
+	if args.input != None:
+		input = open(args.input)
+	else:
+		sys.stdin = open('/dev/tty')
+	with open(args.befunge) as f:
+		cells = [list(map(ord, x.rstrip('\n'))) for x in f.readlines()]
+
 def main():
 	global cells, dim
-	cells = [list(map(ord, x.rstrip('\n'))) for x in sys.stdin.readlines()]
-	sys.stdin = open('/dev/tty')
+	parse_args()
 	m = max(map(len, cells))
 	dim = (m, len(cells))
 	reformat_cells()
