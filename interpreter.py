@@ -1,294 +1,283 @@
-from __future__ import print_function
-import sys, random, argparse
+import argparse
+import random
 
-cells = [] #  program cells
-dim = (0,0) # dimensions of the program
-delta = (1,0) # current direction
-ip = (0,0) # current position of IP
-stack = [] # program stack
-string_mode = False # string mode (on or off)
-input = None # input for & and ~ if file supplied
 
-# -------- cmd functions -- #
+class Interpreter:
+    class End(Exception):
+        pass
 
-def mv_right():
-	global delta
-	delta = (1,0)
+    def __init__(self, filename, input_source: "Input"):
+        self.input_source = input_source
+        self.stack = []
+        self.ip = (0, 0)
+        self.delta = (1, 0)
+        self.dim = (0, 0)
+        self.string_mode = False
 
-def mv_down():
-	global delta
-	delta = (0,1)
+        with open(filename) as f:
+            self.cells = [list(map(ord, line.rstrip("\n"))) for line in f.readlines()]
+        self.reformat_cells(max(map(len, self.cells)), len(self.cells))
 
-def mv_left():
-	global delta
-	delta = (-1,0)
+    def parse(self):
+        while True:
+            x, y = self.ip
+            cell = self.cells[y][x]
+            try:
+                self.parse_symbol(chr(cell))
+            except SyntaxError:
+                # Command not found
+                return
+            except ValueError:
+                # Couldn't convert symbol to char
+                return
+            except self.End:
+                return
+            self.update_ip()
 
-def mv_up():
-	global delta
-	delta = (0,-1)
+    def parse_symbol(self, symbol):
+        if symbol == "@":
+            raise self.End
+        if symbol == '"':
+            self.str_mode()
+        elif self.string_mode:
+            self.push(ord(symbol))
+        elif symbol in "0123456789":
+            self.push(int(symbol))
+        elif symbol.isspace():
+            pass
+        else:
+            command = self.get_command(symbol)
+            if command is None:
+                raise SyntaxError
+            command()
 
-def mv_rand():
-	random.choice([mv_right, mv_down, mv_left, mv_up])()
+    def get_command(self, symbol):
+        return {
+            ">": self.mv_right,
+            "v": self.mv_down,
+            "<": self.mv_left,
+            "^": self.mv_up,
+            "?": self.mv_rand,
+            ".": self.out_int,
+            ",": self.out_char,
+            "&": self.in_int,
+            "~": self.in_char,
+            "+": self.op_add,
+            "-": self.op_sub,
+            "*": self.op_mult,
+            "/": self.op_div,
+            "%": self.op_mod,
+            "`": self.op_gt,
+            "=": self.op_eq,
+            "!": self.op_not,
+            "_": self.if_hor,
+            "|": self.if_ver,
+            ":": self.stk_dup,
+            "\\": self.stk_swap,
+            "$": self.stk_pop,
+            '"': self.str_mode,
+            "#": self.bridge,
+            "g": self.code_get,
+            "p": self.code_put,
+        }.get(symbol)
 
-def out_int():
-	print(pop())
+    def update_ip(self):
+        self.ip = (
+            (self.ip[0] + self.delta[0]) % len(self.cells[0]),
+            (self.ip[1] + self.delta[1]) % len(self.cells),
+        )
 
-def out_char():
-	try:
-		print(chr(pop()), end='')
-	except ValueError:
-		print(0)
+    def push(self, v):
+        self.stack.append(v)
 
-def in_int():
-	try:
-		if input==None:
-			push(int(raw_input('int: ')))
-		else:
-			push(int(input.readline().strip()))
-	except ValueError: # couldn't parse
-		push(0) # maybe end?
-	check_input()
+    def pop(self):
+        try:
+            return self.stack.pop()
+        except IndexError:
+            return 0
 
-def in_char():
-	try:
-		i = ''
-		if input==None:
-			i = raw_input('char: ')
-			if len(i) == 0:
-				i = '\n'
-		else:
-			i = input.read(1)
-	except EOFError:
-		print('EOF')
-		push(-1)
-	if len(i)>0:
-		try:
-			push(ord(i[0]))
-		except TypeError: # non ascii char
-			push(0)
-	else:
-		push(-1)
-	check_input()
+    def reformat_cells(self, x, y):
+        self.dim = (x, y)
+        self.cells.extend([[]] * (y - len(self.cells)))
+        for row in self.cells:
+            row.extend([ord(" ")] * (x - len(row)))
 
-def op_add():
-	push(pop() + pop())
+    # Commands
 
-def op_sub():
-	push(-pop() + pop())
+    def mv_right(self):
+        self.delta = (1, 0)
 
-def op_mult():
-	push(pop() * pop())
+    def mv_down(self):
+        self.delta = (0, 1)
 
-def op_div():
-	a = pop()
-	b = pop()
-	try:
-		push(b / a)
-	except ZeroDivisionError:
-		push(0) # ask for input?
+    def mv_left(self):
+        self.delta = (-1, 0)
 
-def op_mod():
-	a = pop()
-	b = pop()
-	try:
-		push(b % a)
-	except ZeroDivisionError:
-		push(0) # ask for input?
+    def mv_up(self):
+        self.delta = (0, -1)
 
-def op_gt():
-	push(int(pop() < pop()))
+    def mv_rand(self):
+        random.choice((self.mv_right, self.mv_down, self.mv_left, self.mv_up))()
 
-def op_eq():
-	push(int(pop() == pop()))
+    def out_int(self):
+        print(self.pop())
 
-def op_not():
-	push(int(not pop()))
+    def out_char(self):
+        try:
+            print(chr(self.pop()), end="")
+        except ValueError:
+            # Out of range
+            print(0)
 
-def if_hor():
-	if pop():
-		mv_left()
-	else:
-		mv_right()
+    def in_int(self):
+        try:
+            self.push(self.input_source.get_next_int())
+        except ValueError:
+            self.push(0)
+        except EOFError:
+            self.push(-1)
 
-def if_ver():
-	if pop():
-		mv_up()
-	else:
-		mv_down()
+    def in_char(self):
+        try:
+            self.push(ord(self.input_source.get_next_char()))
+        except EOFError:
+            self.push(-1)
 
-def stk_dup():
-	a = pop()
-	push(a)
-	push(a)
+    def op_add(self):
+        self.push(self.pop() + self.pop())
 
-def stk_swap():
-	a = pop()
-	b = pop()
-	push(a)
-	push(b)
+    def op_sub(self):
+        self.push(-self.pop() + self.pop())
 
-def stk_pop():
-	pop()
+    def op_mult(self):
+        self.push(self.pop() * self.pop())
 
-def strmode():
-	global string_mode
-	string_mode = not string_mode
+    def op_div(self):
+        x = self.pop()
+        y = self.pop()
+        try:
+            self.push(y / x)
+        except ZeroDivisionError:
+            self.push(0)
 
-def bridge():
-	update_ip()
+    def op_mod(self):
+        x = self.pop()
+        y = self.pop()
+        try:
+            self.push(y % x)
+        except ZeroDivisionError:
+            self.push(0)
 
-def code_get():
-	y = pop()
-	x = pop()
-	try:
-		push(cells[y][x])
-	except IndexError:
-		push(0)
+    def op_gt(self):
+        self.push(int(self.pop() < self.pop()))
 
-def code_put():
-	global dim
-	y = pop()
-	x = pop()
-	v = pop()
-	try:
-		cells[y][x] = v
-	except IndexError:
-		if x<0 or y<0:
-			return
-		dim = (max(dim[0], x+1), max(dim[1], y+1))
-		reformat_cells()
-		cells[y][x] = v
-	#print_cells()
+    def op_eq(self):
+        self.push(int(self.pop() == self.pop()))
 
-def end():
-	sys.exit()
+    def op_not(self):
+        self.push(int(not self.pop()))
 
-# ----------------- cmds -- #
+    def if_hor(self):
+        if self.pop():
+            self.mv_left()
+        else:
+            self.mv_right()
 
-cmd = \
-{
-	'>':mv_right,
-	'v':mv_down,
-	'<':mv_left,
-	'^':mv_up,
-	'?':mv_rand,
-	'.':out_int,
-	',':out_char,
-	'&':in_int,
-	'~':in_char,
-	'+':op_add,
-	'-':op_sub,
-	'*':op_mult,
-	'/':op_div,
-	'%':op_mod,
-	'`':op_gt,
-	'=':op_eq,
-	'!':op_not,
-	'_':if_hor,
-	'|':if_ver,
-	':':stk_dup,
-	'\\':stk_swap,
-	'$':stk_pop,
-	'"':strmode,
-	'#':bridge,
-	'g':code_get,
-	'p':code_put,
-	'@':end
-}
+    def if_ver(self):
+        if self.pop():
+            self.mv_up()
+        else:
+            self.mv_down()
 
-# --------- program flow -- #
+    def stk_dup(self):
+        v = self.pop()
+        self.push(v)
+        self.push(v)
 
-def update_ip():
-	global ip
-	x,y = ip[0]+delta[0], ip[1]+delta[1]
-	if x<0:
-		x = len(cells[0])-1
-	else:
-		x %= len(cells[0])
-	if y<0:
-		y = len(cells)-1
-	elif y>0:
-		y %= len(cells)
-	ip = (x,y)
-	
-def prog():
-	while True:
-		x = ip[0]
-		y = ip[1]
-		symbol = cells[y][x]
-		if symbol == ord('"'):
-			strmode()
-		elif string_mode:
-			try:
-				push(symbol)
-			except TypeError: # non ascii char
-				push(0)
-		elif symbol in [ord(x) for x in cmd.keys()]:
-			cmd[chr(symbol)]()
-		elif symbol == ord(' '):
-			pass
-		elif symbol in [ord(x) for x in '0123456789']:
-			push(int(chr(symbol)))
-		else:
-			print('Syntax error:', ip)
-			end()
-		update_ip()
+    def stk_swap(self):
+        a = self.pop()
+        b = self.pop()
+        self.push(a)
+        self.push(b)
 
-# ----- stack operations -- #
+    def stk_pop(self):
+        self.pop()
 
-def push(x):
-	stack.append(x)
+    def str_mode(self):
+        self.string_mode = not self.string_mode
 
-def pop():
-	try:
-		return stack.pop()
-	except IndexError: # empty
-		return 0
+    def bridge(self):
+        self.update_ip()
 
-# ----------------- init -- #
+    def code_get(self):
+        y = self.pop()
+        x = self.pop()
+        try:
+            self.push(self.cells[y][x])
+        except IndexError:
+            self.push(0)
 
-def check_input():
-	global input
-	if input == None:
-		return
-	if input.read(1) == '':
-		input = None # start reading from stdin now
-	else:
-		input.seek(-1, 1) # return pointer to correct byte
+    def code_put(self):
+        y = self.pop()
+        x = self.pop()
+        v = self.pop()
+        try:
+            self.cells[y][x] = v
+        except IndexError:
+            if x < 0 or y < 0:
+                return
+            self.reformat_cells(max(self.dim[0], x + 1), max(self.dim[1], y + 1))
+            self.cells[y][x] = v
 
-def reformat_cells():
-	global cells, dim
-	while len(cells) < dim[1]:
-		cells.append([])
-	for row in cells:
-		while len(row) < dim[0]:
-			row.append(ord(' '))
 
-def print_cells():
-	c = [list(map(chr, x)) for x in cells]
-	for row in c:
-		print(row)
+class Input:
+    def get_next_char(self) -> str:
+        pass
 
-def parse_args():
-	global cells, input
-	parser = argparse.ArgumentParser()
-	parser.add_argument('-i', '--input', required=False)
-	parser.add_argument('befunge')
-	args = parser.parse_args()
-	if args.input != None:
-		input = open(args.input)
-	else:
-		sys.stdin = open('/dev/tty')
-	with open(args.befunge) as f:
-		cells = [list(map(ord, x.rstrip('\n'))) for x in f.readlines()]
+    def get_next_int(self) -> int:
+        pass
+
+
+class UserInput(Input):
+    def get_next_char(self) -> str:
+        return (input("char: ") or "\n")[0]
+
+    def get_next_int(self) -> int:
+        return int(input("int: "))
+
+
+class FileInput(Input):
+    def __init__(self, file):
+        self.file = file
+        self.done = False
+        self.user_input = UserInput()
+
+    def get_next_char(self) -> str:
+        if self.done:
+            return self.user_input.get_next_char()
+        char = self.file.read(1)
+        if char != "":
+            return char
+        self.done = True
+        raise EOFError
+
+    def get_next_int(self) -> int:
+        if self.done:
+            return self.user_input.get_next_int()
+        return int(self.get_next_char())
+
 
 def main():
-	global cells, dim
-	parse_args()
-	m = max(map(len, cells))
-	dim = (m, len(cells))
-	reformat_cells()
-	prog()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--input", required=False)
+    parser.add_argument("program")
+    args = parser.parse_args()
+    if args.input is not None:
+        input_source = FileInput(open(args.input))
+    else:
+        input_source = UserInput()
+    Interpreter(args.program, input_source).parse()
 
-if __name__ == '__main__':
-	main()
+
+if __name__ == "__main__":
+    main()
