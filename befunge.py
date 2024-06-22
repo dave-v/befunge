@@ -68,7 +68,6 @@ class Interpreter:
             "/": self.op_div,
             "%": self.op_mod,
             "`": self.op_gt,
-            "=": self.op_eq,
             "!": self.op_not,
             "_": self.if_hor,
             "|": self.if_ver,
@@ -170,9 +169,6 @@ class Interpreter:
 
     def op_gt(self):
         self.push(int(self.pop() < self.pop()))
-
-    def op_eq(self):
-        self.push(int(self.pop() == self.pop()))
 
     def op_not(self):
         self.push(int(not self.pop()))
